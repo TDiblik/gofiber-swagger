@@ -32,9 +32,49 @@ func CreateSchema[T any]() *SchemaRef {
 	return generateSchema(reflect.TypeOf(t))
 }
 
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func resolveGenericType(fieldType reflect.Type, parentType reflect.Type) reflect.Type {
+	// If your fieldType is interface{} or any, and your parent is a known generic wrapper:
+	if fieldType.Kind() == reflect.Interface {
+		if concrete, ok := genericMapping[parentType]; ok {
+			return concrete
+		}
+	}
+	return nil
+}
+
+var genericMapping = map[reflect.Type]reflect.Type{} // or sync.Map
+
+// Called during NewResponseInfo[T]
+func recordGenericType(wrapperT reflect.Type, itemT reflect.Type) {
+	genericMapping[wrapperT] = itemT
+}
+
 func generateSchema(t reflect.Type) *SchemaRef {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
+	}
+
+	// Handle slices (e.g. Response[[]User])
+	if t.Kind() == reflect.Slice {
+		return &SchemaRef{Value: &Schema{
+			Type:  &Types{"array"},
+			Items: generateSchema(t.Elem()),
+		}}
+	}
+
+	// Handle map[string]X
+	if t.Kind() == reflect.Map && t.Key().Kind() == reflect.String {
+		return &SchemaRef{Value: &Schema{
+			Type: &Types{"object"},
+			AdditionalProperties: AdditionalProperties{
+				Has:    boolPtr(true),
+				Schema: generateSchema(t.Elem()),
+			},
+		}}
 	}
 
 	tName := t.Name()
@@ -80,7 +120,7 @@ func generateSchema(t reflect.Type) *SchemaRef {
 		// set placeholder that will get overwritten to prevent recursion
 		setToAcquiredSchemas(ref, &SchemaRef{Value: &Schema{}})
 
-		for i := range t.NumField() {
+		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
 
 			jsonTag, jsonTagExists := field.Tag.Lookup("json")
@@ -103,169 +143,179 @@ func generateSchema(t reflect.Type) *SchemaRef {
 			fieldTypePkgPath := fieldType.PkgPath()
 			fieldKind := fieldType.Kind()
 
-			// for debugging purposes:
-			// log.Println(field)
-
-			// create schema for the field. First handle special cases!
+			// create schema for the field
 			var result *SchemaRef = nil
-			switch {
-			// skip channels and functions
-			case fieldKind == reflect.Func, fieldKind == reflect.Chan:
-				continue
 
-			// handle time.Time type
-			case fieldKind == reflect.Struct && fieldType == timeType:
-				result = &SchemaRef{Value: &Schema{
-					Type:   &Types{"string"},
-					Format: "date-time",
-				}}
-
-			// handle file uploads
-			case fieldKind == reflect.Struct && fieldTypeName == "FileHeader" && fieldTypePkgPath == "mime/multipart":
-				result = &SchemaRef{Value: &Schema{
-					Type:   &Types{"string"},
-					Format: "binary",
-				}}
-
-			// handle uuid.UUID
-			case fieldKind == reflect.Array && fieldTypeName == "UUID" && fieldType.Elem().Kind() == reflect.Uint8:
-				result = &SchemaRef{Value: &Schema{
-					Type:   &Types{"string"},
-					Format: "uuid",
-				}}
-
-			// handle uuid.NullUUID and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullUUID", "UUID") || isNullTypeWrapper(fieldType, "NullUUID", "UUID")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:   &Types{"string"},
-					Format: "uuid",
-				}}
-
-			// handle sql.NullBool and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullBool", "Bool") || isNullTypeWrapper(fieldType, "NullBool", "Bool")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type: &Types{"boolean"},
-				}}
-
-			// handle sql.NullByte and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullByte", "Byte") || isNullTypeWrapper(fieldType, "NullByte", "Byte")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:   &Types{"string"},
-					Format: "byte",
-				}}
-
-			// handle sql.NullInt16 and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullInt16", "Int16") || isNullTypeWrapper(fieldType, "NullInt16", "Int16")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:         &Types{"integer"},
-					Min:          &minInt16,
-					Max:          &maxInt16,
-					ExclusiveMin: false,
-					ExclusiveMax: false,
-				}}
-
-			// handle sql.NullInt32 and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullInt32", "Int32") || isNullTypeWrapper(fieldType, "NullInt32", "Int32")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:         &Types{"integer"},
-					Format:       "int32",
-					Min:          &minInt32,
-					Max:          &maxInt32,
-					ExclusiveMin: false,
-					ExclusiveMax: false,
-				}}
-
-			// handle sql.NullInt64 and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullInt64", "Int64") || isNullTypeWrapper(fieldType, "NullInt64", "Int64")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:         &Types{"integer"},
-					Format:       "int64",
-					Min:          &minInt64,
-					Max:          &maxInt64,
-					ExclusiveMin: false,
-					ExclusiveMax: false,
-				}}
-
-			// handle sql.NullFloat64 and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullFloat64", "Float64") || isNullTypeWrapper(fieldType, "NullFloat64", "Float64")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:         &Types{"number"},
-					Format:       "double",
-					Min:          &minInt64,
-					Max:          &maxInt64,
-					ExclusiveMin: false,
-					ExclusiveMax: false,
-				}}
-
-			// handle sql.NullTime and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullTime", "Time") || isNullTypeWrapper(fieldType, "NullTime", "Time")): // todo: we could also check whether the Time field is of time.Time type
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type:   &Types{"string"},
-					Format: "date-time",
-				}}
-
-			// handle sql.NullString and it's alias wrappers
-			case fieldKind == reflect.Struct && (isNullType(fieldType, "NullString", "String") || isNullTypeWrapper(fieldType, "NullString", "String")):
-				isNullable = true
-				result = &SchemaRef{Value: &Schema{
-					Type: &Types{"string"},
-				}}
-
-			// handle bytes
-			case fieldKind == reflect.Slice && fieldType.Elem().Kind() == reflect.Uint8:
-				if fieldType == rawMessageType {
-					result = &SchemaRef{Value: &Schema{}}
+			// Handle interface{} or generics
+			if fieldKind == reflect.Interface {
+				if concrete := resolveGenericType(fieldType, t); concrete != nil {
+					result = generateSchema(concrete)
 				} else {
+					result = &SchemaRef{Value: &Schema{Type: &Types{"object"}}}
+				}
+			} else {
+				switch {
+				// skip channels and functions
+				case fieldKind == reflect.Func, fieldKind == reflect.Chan:
+					continue
+
+				// handle time.Time type
+				case fieldKind == reflect.Struct && fieldType == timeType:
+					result = &SchemaRef{Value: &Schema{
+						Type:   &Types{"string"},
+						Format: "date-time",
+					}}
+
+				// handle file uploads
+				case fieldKind == reflect.Struct && fieldTypeName == "FileHeader" && fieldTypePkgPath == "mime/multipart":
+					result = &SchemaRef{Value: &Schema{
+						Type:   &Types{"string"},
+						Format: "binary",
+					}}
+
+				// handle uuid.UUID
+				case fieldKind == reflect.Array && fieldTypeName == "UUID" && fieldType.Elem().Kind() == reflect.Uint8:
+					result = &SchemaRef{Value: &Schema{
+						Type:   &Types{"string"},
+						Format: "uuid",
+					}}
+
+				// handle uuid.NullUUID and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullUUID", "UUID") || isNullTypeWrapper(fieldType, "NullUUID", "UUID")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type:   &Types{"string"},
+						Format: "uuid",
+					}}
+
+				// handle sql.NullBool and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullBool", "Bool") || isNullTypeWrapper(fieldType, "NullBool", "Bool")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type: &Types{"boolean"},
+					}}
+
+				// handle sql.NullByte and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullByte", "Byte") || isNullTypeWrapper(fieldType, "NullByte", "Byte")):
+					isNullable = true
 					result = &SchemaRef{Value: &Schema{
 						Type:   &Types{"string"},
 						Format: "byte",
 					}}
-				}
 
-			// handle map[string]object
-			case fieldKind == reflect.Map && fieldType.Key().Kind() == reflect.String:
-				valueSchema := generateSchema(fieldType.Elem())
-				has := true
-				result = &SchemaRef{Value: &Schema{
-					Type: &Types{"object"},
-					AdditionalProperties: AdditionalProperties{
-						Has:    &has,
-						Schema: valueSchema,
-					},
-				}}
+				// handle sql.NullInt16 and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullInt16", "Int16") || isNullTypeWrapper(fieldType, "NullInt16", "Int16")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type:         &Types{"integer"},
+						Min:          &minInt16,
+						Max:          &maxInt16,
+						ExclusiveMin: false,
+						ExclusiveMax: false,
+					}}
 
-			// handle general structs
-			case fieldKind == reflect.Struct:
-				result = generateSchema(fieldType)
+				// handle sql.NullInt32 and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullInt32", "Int32") || isNullTypeWrapper(fieldType, "NullInt32", "Int32")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type:         &Types{"integer"},
+						Format:       "int32",
+						Min:          &minInt32,
+						Max:          &maxInt32,
+						ExclusiveMin: false,
+						ExclusiveMax: false,
+					}}
 
-			// handle general slices / arrays
-			case fieldKind == reflect.Slice, fieldKind == reflect.Array:
-				result = &SchemaRef{Value: &Schema{
-					Type:  &Types{"array"},
-					Items: generateSchema(fieldType.Elem()),
-				}}
+				// handle sql.NullInt64 and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullInt64", "Int64") || isNullTypeWrapper(fieldType, "NullInt64", "Int64")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type:         &Types{"integer"},
+						Format:       "int64",
+						Min:          &minInt64,
+						Max:          &maxInt64,
+						ExclusiveMin: false,
+						ExclusiveMax: false,
+					}}
 
-			// handle general maps / interface{} / any
-			case fieldKind == reflect.Map || fieldKind == reflect.Interface:
-				result = &SchemaRef{Value: &Schema{
-					Type: &Types{"object"},
-				}}
+				// handle sql.NullFloat64 and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullFloat64", "Float64") || isNullTypeWrapper(fieldType, "NullFloat64", "Float64")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type:         &Types{"number"},
+						Format:       "double",
+						Min:          &minInt64,
+						Max:          &maxInt64,
+						ExclusiveMin: false,
+						ExclusiveMax: false,
+					}}
 
-			// generated default schema for non-special types (string/int/etc)
-			default:
-				result = &SchemaRef{
-					Value: getDefaultSchema(fieldType),
+				// handle sql.NullTime and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullTime", "Time") || isNullTypeWrapper(fieldType, "NullTime", "Time")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type:   &Types{"string"},
+						Format: "date-time",
+					}}
+
+				// handle sql.NullString and it's alias wrappers
+				case fieldKind == reflect.Struct && (isNullType(fieldType, "NullString", "String") || isNullTypeWrapper(fieldType, "NullString", "String")):
+					isNullable = true
+					result = &SchemaRef{Value: &Schema{
+						Type: &Types{"string"},
+					}}
+
+				// handle bytes
+				case fieldKind == reflect.Slice && fieldType.Elem().Kind() == reflect.Uint8:
+					if fieldType == rawMessageType {
+						result = &SchemaRef{Value: &Schema{}}
+					} else {
+						result = &SchemaRef{Value: &Schema{
+							Type:   &Types{"string"},
+							Format: "byte",
+						}}
+					}
+
+				// handle map[string]object
+				case fieldKind == reflect.Map && fieldType.Key().Kind() == reflect.String:
+					valueSchema := generateSchema(fieldType.Elem())
+					has := true
+					result = &SchemaRef{Value: &Schema{
+						Type: &Types{"object"},
+						AdditionalProperties: AdditionalProperties{
+							Has:    &has,
+							Schema: valueSchema,
+						},
+					}}
+
+				// handle general structs
+				case fieldKind == reflect.Struct:
+					result = generateSchema(fieldType)
+
+				// handle general slices / arrays
+				case fieldKind == reflect.Slice, fieldKind == reflect.Array:
+					result = &SchemaRef{Value: &Schema{
+						Type:  &Types{"array"},
+						Items: generateSchema(fieldType.Elem()),
+					}}
+
+				// handle general maps / interface{} / any
+				case fieldKind == reflect.Map || fieldKind == reflect.Interface:
+					result = &SchemaRef{Value: &Schema{
+						Type: &Types{"object"},
+					}}
+
+				// generated default schema for non-special types (string/int/etc)
+				default:
+					result = &SchemaRef{
+						Value: getDefaultSchema(fieldType),
+					}
 				}
 			}
-			result.Value.Nullable = isNullable
+
+			if result != nil && result.Value != nil {
+				result.Value.Nullable = isNullable
+			}
 
 			// handle json tag
 			fieldName := field.Name
@@ -361,8 +411,6 @@ func generateSchema(t reflect.Type) *SchemaRef {
 				case strings.HasPrefix(validation, "omitnil"):
 					result.Value.Description += " omitnil "
 				case strings.HasPrefix(validation, "oneof="):
-					// oneof is more important than all other options since that's what the validator is using...
-					// in that case, ignore and overwrite every other enum / OneOf options
 					options := []any{}
 					stringOptions := strings.Split(strings.TrimPrefix(validation, "oneof="), " ")
 					for _, option := range stringOptions {
