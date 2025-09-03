@@ -3,7 +3,7 @@ module github.com/TDiblik/gofiber-swagger
 go 1.25.0
 
 require (
-	github.com/getkin/kin-openapi v0.132.0
+	github.com/getkin/kin-openapi v0.133.0
 	github.com/gofiber/fiber/v3 v3.0.0-rc.1
 	github.com/google/uuid v1.6.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -31,6 +31,7 @@ require (
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.65.0 // indirect
+	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
