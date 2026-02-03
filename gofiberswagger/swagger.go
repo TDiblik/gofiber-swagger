@@ -165,20 +165,19 @@ func generateOpenApiSchema(schema openapi3.T) (as_json, as_yaml []byte, err erro
 func createSwaggerFiles(target_folder_path string, index_page []byte, schema_as_json []byte, schema_as_yaml []byte) error {
 	var creation_perms os.FileMode = 0o766
 
-	swagger_dir := filepath.Dir(target_folder_path)
-	if err := os.MkdirAll(swagger_dir, creation_perms); err != nil {
+	if err := os.MkdirAll(target_folder_path, creation_perms); err != nil {
 		return errors.Join(errors.New("unable to create file directory for swagger files"), err)
 	}
 
-	if err := os.WriteFile(filepath.Join(swagger_dir, "index.html"), index_page, creation_perms); err != nil {
+	if err := os.WriteFile(filepath.Join(target_folder_path, "index.html"), index_page, creation_perms); err != nil {
 		return errors.Join(errors.New("unable to create index.html for swagger files"), err)
 	}
 
-	if err := os.WriteFile(filepath.Join(swagger_dir, "swagger.json"), schema_as_json, creation_perms); err != nil {
+	if err := os.WriteFile(filepath.Join(target_folder_path, "swagger.json"), schema_as_json, creation_perms); err != nil {
 		return errors.Join(errors.New("unable to create swagger.json for swagger files"), err)
 	}
 
-	if err := os.WriteFile(filepath.Join(swagger_dir, "swagger.yaml"), schema_as_yaml, creation_perms); err != nil {
+	if err := os.WriteFile(filepath.Join(target_folder_path, "swagger.yaml"), schema_as_yaml, creation_perms); err != nil {
 		return errors.Join(errors.New("unable to create swagger.yaml for swagger files"), err)
 	}
 

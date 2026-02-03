@@ -2,15 +2,22 @@ package gofiberswagger
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
 type RouteInfo = openapi3.Operation
 
-var acquiredRoutesInfo map[string]*RouteInfo
+var (
+	acquiredRoutesInfo map[string]*RouteInfo
+	mutex              = &sync.Mutex{}
+)
 
 func RegisterRoute(method string, path string, info *RouteInfo) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	if acquiredRoutesInfo == nil {
 		acquiredRoutesInfo = make(map[string]*RouteInfo)
 	}
@@ -21,6 +28,9 @@ func RegisterRoute(method string, path string, info *RouteInfo) {
 }
 
 func getAcquiredRoutesInfo(method string, path string) *RouteInfo {
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	if acquiredRoutesInfo == nil {
 		return nil
 	}
