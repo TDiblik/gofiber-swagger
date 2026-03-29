@@ -14,17 +14,12 @@ func main() {
 
 	// these do not require auth
 	router.Get("/", nil, HelloHandler)
-	router.Get("/abc", nil, HelloHandler)
-	router.Get("/bca", nil, HelloHandler)
-
-	// create as a variable so we can reuse it
-	security_requirements_docs := &gofiberswagger.SecurityRequirements{{
-		"User API Token": {},
-	}}
 
 	// Option A: specify Security field with your SecurityRequirements for each route
 	router.Get("/behind-auth", &gofiberswagger.RouteInfo{
-		Security: security_requirements_docs,
+		Security: &gofiberswagger.SecurityRequirements{{
+			"User API Token": {},
+		}},
 	}, HelloHandler)
 
 	// You can now see your:
