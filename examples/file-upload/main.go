@@ -38,15 +38,15 @@ func HelloHandler(c fiber.Ctx) error {
 }
 
 type UploadRequest struct {
-	File1 *multipart.FileHeader    `form:"file1"`
+	File1 *multipart.FileHeader    `form:"file1" validate:"required"`
 	File2 multipart.FileHeader     `form:"file2"`
-	Files *[]*multipart.FileHeader `form:"files" validate:"required,dive,required"`
+	Files *[]*multipart.FileHeader `form:"files"`
 }
 
 func UploadHandler(c fiber.Ctx) error {
 	file, err := c.FormFile("file1")
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"status": "error", "msg": "This API endpoint requires \"some_file\" submitted as a form file."})
+		return c.Status(400).JSON(fiber.Map{"status": "error", "msg": "This API endpoint requires \"file1\" submitted as a form file."})
 	}
 
 	return c.Status(200).JSON(fiber.Map{"status": "ok", "file": file})

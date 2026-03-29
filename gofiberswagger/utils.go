@@ -21,7 +21,7 @@ var (
 	uuidType       = reflect.TypeOf(uuid.UUID{})
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
 
-	zeroInt    = float64(0)
+	zeroUInt   = float64(0)
 	maxInt     = float64(math.MaxInt)
 	minInt     = float64(math.MinInt)
 	maxInt8    = float64(math.MaxInt8)

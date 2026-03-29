@@ -64,6 +64,9 @@ func generateSchema(t reflect.Type, stopRecursion bool) *SchemaRef {
 	}
 
 	schema := getDefaultSchema(t)
+	if schema.Type != nil && (*schema.Type)[0] != "object" {
+		return &SchemaRef{Value: schema}
+	}
 
 	// Handle empty struct{}
 	if t.Kind() == reflect.Struct && t.NumField() == 0 {
@@ -113,7 +116,10 @@ func generateSchema(t reflect.Type, stopRecursion bool) *SchemaRef {
 			}
 
 			jsonTag, jsonTagExists := field.Tag.Lookup("json")
-			if jsonTag == "-" {
+			formTag, formTagExists := field.Tag.Lookup("form")
+			queryTag, queryTagExists := field.Tag.Lookup("query")
+
+			if jsonTag == "-" && !formTagExists && !queryTagExists {
 				continue
 			}
 
@@ -131,9 +137,6 @@ func generateSchema(t reflect.Type, stopRecursion bool) *SchemaRef {
 			fieldTypeName := fieldType.Name()
 			fieldTypePkgPath := fieldType.PkgPath()
 			fieldKind := fieldType.Kind()
-
-			// for debugging purposes:
-			// log.Println(field)
 
 			// create schema for the field. First handle special cases!
 			var result *SchemaRef = nil
@@ -296,12 +299,18 @@ func generateSchema(t reflect.Type, stopRecursion bool) *SchemaRef {
 			}
 			result.Value.Nullable = isNullable
 
-			// handle json tag
+			// handle property name
 			fieldName := field.Name
-			jsonTagOptions := strings.Split(jsonTag, ",")
-			if jsonTagExists && len(jsonTagOptions) > 0 && jsonTagOptions[0] != "" {
-				fieldName = jsonTagOptions[0]
+			if jsonTagExists && strings.Split(jsonTag, ",")[0] != "" {
+				fieldName = strings.Split(jsonTag, ",")[0]
+			} else if formTagExists && strings.Split(formTag, ",")[0] != "" {
+				fieldName = strings.Split(formTag, ",")[0]
+			} else if queryTagExists && strings.Split(queryTag, ",")[0] != "" {
+				fieldName = strings.Split(queryTag, ",")[0]
 			}
+
+			// handle json tag options
+			jsonTagOptions := strings.Split(jsonTag, ",")
 			for i := 1; i < len(jsonTagOptions); i++ {
 				option := jsonTagOptions[i]
 				switch option {
@@ -349,7 +358,16 @@ func generateSchema(t reflect.Type, stopRecursion bool) *SchemaRef {
 			for _, validation := range validateTagOptions {
 				switch {
 				case validation == "required":
-					schema.Required = append(schema.Required, fieldName)
+					alreadyRequired := false
+					for _, r := range schema.Required {
+						if r == fieldName {
+							alreadyRequired = true
+							break
+						}
+					}
+					if !alreadyRequired {
+						schema.Required = append(schema.Required, fieldName)
+					}
 					result.Value.Nullable = false
 					result.Value.AllowEmptyValue = false
 				case strings.HasPrefix(validation, "min=") && (fieldKind == reflect.Slice || fieldKind == reflect.Array):
@@ -425,80 +443,99 @@ func getDefaultSchema(t reflect.Type) *Schema {
 		Properties: make(Schemas),
 		Required:   []string{},
 	}
+
+	switch {
+	case t == timeType:
+		schema.Type = &Types{"string"}
+		schema.Format = "date-time"
+		return &schema
+
+	case t == fileHeaderType:
+		schema.Type = &Types{"string"}
+		schema.Format = "binary"
+		return &schema
+
+	case t == uuidType:
+		schema.Type = &Types{"string"}
+		schema.Format = "uuid"
+		return &schema
+
+	case t == rawMessageType:
+		return &schema
+	}
+
+	if t.Kind() == reflect.Struct {
+		nullTypes := []struct {
+			name, field, openType, format string
+			min, max                      *float64
+		}{
+			{"NullUUID", "UUID", "string", "uuid", nil, nil},
+			{"NullBool", "Bool", "boolean", "", nil, nil},
+			{"NullByte", "Byte", "string", "byte", nil, nil},
+			{"NullString", "String", "string", "", nil, nil},
+			{"NullTime", "Time", "string", "date-time", nil, nil},
+			{"NullInt16", "Int16", "integer", "", &minInt16, &maxInt16},
+			{"NullInt32", "Int32", "integer", "int32", &minInt32, &maxInt32},
+			{"NullInt64", "Int64", "integer", "int64", &minInt64, &maxInt64},
+			{"NullFloat64", "Float64", "number", "double", &minInt64, &maxInt64},
+		}
+
+		for _, nt := range nullTypes {
+			if isNullType(t, nt.name, nt.field) || isNullTypeWrapper(t, nt.name, nt.field) {
+				schema.Type = &Types{nt.openType}
+				schema.Format = nt.format
+				schema.Nullable = true
+				schema.Min = nt.min
+				schema.Max = nt.max
+				if nt.openType == "integer" || nt.openType == "number" {
+					schema.ExclusiveMin = false
+					schema.ExclusiveMax = false
+				}
+				return &schema
+			}
+		}
+	}
+
 	switch t.Kind() {
 	case reflect.Bool:
 		schema.Type = &Types{"boolean"}
 		schema.Default = false
 
-	case reflect.Int:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		schema.Type = &Types{"integer"}
-		schema.Min = &minInt
-		schema.Max = &maxInt
+		switch t.Kind() {
+		case reflect.Int:
+			schema.Min, schema.Max = &minInt, &maxInt
+		case reflect.Int8:
+			schema.Min, schema.Max = &minInt8, &maxInt8
+		case reflect.Int16:
+			schema.Min, schema.Max = &minInt16, &maxInt16
+		case reflect.Int32:
+			schema.Format = "int32"
+			schema.Min, schema.Max = &minInt32, &maxInt32
+		case reflect.Int64:
+			schema.Format = "int64"
+			schema.Min, schema.Max = &minInt64, &maxInt64
+		}
 		schema.ExclusiveMin = false
 		schema.ExclusiveMax = false
 		schema.Default = 0
-	case reflect.Int8:
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		schema.Type = &Types{"integer"}
-		schema.Min = &minInt8
-		schema.Max = &maxInt8
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Int16:
-		schema.Type = &Types{"integer"}
-		schema.Min = &minInt16
-		schema.Max = &maxInt16
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Int32:
-		schema.Type = &Types{"integer"}
-		schema.Format = "int32"
-		schema.Min = &minInt32
-		schema.Max = &maxInt32
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Int64:
-		schema.Type = &Types{"integer"}
-		schema.Format = "int64"
-		schema.Min = &minInt64
-		schema.Max = &maxInt64
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Uint:
-		schema.Type = &Types{"integer"}
-		schema.Min = &zeroInt
-		schema.Max = &maxUint
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Uint8:
-		schema.Type = &Types{"integer"}
-		schema.Min = &zeroInt
-		schema.Max = &maxUint8
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Uint16:
-		schema.Type = &Types{"integer"}
-		schema.Min = &zeroInt
-		schema.Max = &maxUint16
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Uint32:
-		schema.Type = &Types{"integer"}
-		schema.Min = &zeroInt
-		schema.Max = &maxUint32
-		schema.ExclusiveMin = false
-		schema.ExclusiveMax = false
-		schema.Default = 0
-	case reflect.Uint64:
-		schema.Type = &Types{"integer"}
-		schema.Min = &zeroInt
-		schema.Max = &maxUint64
+		schema.Min = &zeroUInt
+		switch t.Kind() {
+		case reflect.Uint:
+			schema.Max = &maxUint
+		case reflect.Uint8:
+			schema.Max = &maxUint8
+		case reflect.Uint16:
+			schema.Max = &maxUint16
+		case reflect.Uint32:
+			schema.Max = &maxUint32
+		case reflect.Uint64:
+			schema.Max = &maxUint64
+		}
 		schema.ExclusiveMin = false
 		schema.ExclusiveMax = false
 		schema.Default = 0
@@ -506,16 +543,15 @@ func getDefaultSchema(t reflect.Type) *Schema {
 	case reflect.Float32:
 		schema.Type = &Types{"number"}
 		schema.Format = "float"
-		schema.Min = &minFloat32
-		schema.Max = &maxFloat32
+		schema.Min, schema.Max = &minFloat32, &maxFloat32
 		schema.ExclusiveMin = false
 		schema.ExclusiveMax = false
 		schema.Default = 0
+
 	case reflect.Float64:
 		schema.Type = &Types{"number"}
 		schema.Format = "double"
-		schema.Min = &minFloat64
-		schema.Max = &maxFloat64
+		schema.Min, schema.Max = &minFloat64, &maxFloat64
 		schema.ExclusiveMin = false
 		schema.ExclusiveMax = false
 		schema.Default = 0
