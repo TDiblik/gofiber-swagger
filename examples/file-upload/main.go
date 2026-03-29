@@ -14,9 +14,7 @@ func main() {
 	router := gofiberswagger.NewRouter(app)
 	router.Get("/", nil, HelloHandler)
 	router.Post("/upload", &gofiberswagger.RouteInfo{
-		RequestBody: gofiberswagger.NewRequestBodyFormData[struct {
-			some_file multipart.FileHeader `validate:"required"`
-		}](),
+		RequestBody: gofiberswagger.NewRequestBodyFormData[UploadRequest](),
 		Responses: gofiberswagger.NewResponses(
 			gofiberswagger.NewResponseInfo[struct {
 				status string
@@ -39,14 +37,17 @@ func HelloHandler(c fiber.Ctx) error {
 	return c.SendStatus(200)
 }
 
+type UploadRequest struct {
+	File1 *multipart.FileHeader    `form:"file1"`
+	File2 multipart.FileHeader     `form:"file2"`
+	Files *[]*multipart.FileHeader `form:"files" validate:"required,dive,required"`
+}
+
 func UploadHandler(c fiber.Ctx) error {
-	file, err := c.FormFile("some_file")
+	file, err := c.FormFile("file1")
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"status": "error", "msg": "This API endpoint requires \"some_file\" submitted as a form file."})
 	}
 
-	// todo: do anything you desire with the uploaded file
-
 	return c.Status(200).JSON(fiber.Map{"status": "ok", "file": file})
-
 }

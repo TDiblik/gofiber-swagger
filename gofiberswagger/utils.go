@@ -3,9 +3,12 @@ package gofiberswagger
 import (
 	"encoding/json"
 	"math"
+	"mime/multipart"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 /// ------------------------------------------------------------------- ///
@@ -14,6 +17,8 @@ import (
 
 var (
 	timeType       = reflect.TypeOf(time.Time{})
+	fileHeaderType = reflect.TypeOf(multipart.FileHeader{})
+	uuidType       = reflect.TypeOf(uuid.UUID{})
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
 
 	zeroInt    = float64(0)

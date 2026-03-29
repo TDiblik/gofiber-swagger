@@ -199,3 +199,65 @@ func TestSchema_WithTags(t *testing.T) {
 	assert.Equal(t, "A", oneofSchema.Value.Enum[0])
 	assert.Equal(t, "B", oneofSchema.Value.Enum[1])
 }
+
+type MultiFileUpload struct {
+	File  *multipart.FileHeader   `json:"file"`
+	Files []*multipart.FileHeader `json:"files"`
+	Times []time.Time             `json:"times"`
+	UUIDs []uuid.UUID             `json:"uuids"`
+}
+
+func TestSchema_MultiFileUpload(t *testing.T) {
+	t.Parallel()
+
+	schema := CreateSchema[MultiFileUpload]()
+	assert.NotNil(t, schema)
+	assert.NotNil(t, schema.Value)
+	assert.Equal(t, "object", (*schema.Value.Type)[0])
+
+	// Single File
+	fileSchema := schema.Value.Properties["file"]
+	assert.NotNil(t, fileSchema)
+	assert.Equal(t, "string", (*fileSchema.Value.Type)[0])
+	assert.Equal(t, "binary", fileSchema.Value.Format)
+
+	// Multiple Files
+	filesSchema := schema.Value.Properties["files"]
+	assert.NotNil(t, filesSchema)
+	assert.Equal(t, "array", (*filesSchema.Value.Type)[0])
+	assert.NotNil(t, filesSchema.Value.Items)
+	assert.Equal(t, "string", (*filesSchema.Value.Items.Value.Type)[0], "Items should be of type string")
+	assert.Equal(t, "binary", filesSchema.Value.Items.Value.Format, "Items format should be binary")
+
+	// Multiple Times
+	timesSchema := schema.Value.Properties["times"]
+	assert.NotNil(t, timesSchema)
+	assert.Equal(t, "array", (*timesSchema.Value.Type)[0])
+	assert.NotNil(t, timesSchema.Value.Items)
+	assert.Equal(t, "string", (*timesSchema.Value.Items.Value.Type)[0], "Items should be of type string")
+	assert.Equal(t, "date-time", timesSchema.Value.Items.Value.Format, "Items format should be date-time")
+
+	// Multiple UUIDs
+	uuidsSchema := schema.Value.Properties["uuids"]
+	assert.NotNil(t, uuidsSchema)
+	assert.Equal(t, "array", (*uuidsSchema.Value.Type)[0])
+	assert.NotNil(t, uuidsSchema.Value.Items)
+	assert.Equal(t, "string", (*uuidsSchema.Value.Items.Value.Type)[0], "Items should be of type string")
+	assert.Equal(t, "uuid", uuidsSchema.Value.Items.Value.Format, "Items format should be uuid")
+}
+
+type WithFormAndQueryTags struct {
+	Form  string `form:"form_field"`
+	Query string `query:"query_field"`
+}
+
+func TestSchema_WithFormAndQueryTags(t *testing.T) {
+	t.Parallel()
+
+	schema := CreateSchema[WithFormAndQueryTags]()
+	assert.NotNil(t, schema)
+	assert.NotNil(t, schema.Value)
+
+	assert.NotNil(t, schema.Value.Properties["form_field"])
+	assert.NotNil(t, schema.Value.Properties["query_field"])
+}
