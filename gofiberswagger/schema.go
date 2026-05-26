@@ -89,9 +89,7 @@ func getSpecialTypeSchema(t reflect.Type) (schema *Schema, isNullable bool, hand
 					Min:    nt.min,
 					Max:    nt.max,
 				}
-				if nt.openType == "integer" || nt.openType == "number" {
-					s.ExclusiveMin, s.ExclusiveMax = false, false
-				}
+
 				return s, true, true
 			}
 		}
@@ -269,7 +267,6 @@ func getDefaultSchema(t reflect.Type) *Schema {
 		schema.Type, schema.Default = &Types{"boolean"}, false
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		schema.Type, schema.Default = &Types{"integer"}, 0
-		schema.ExclusiveMin, schema.ExclusiveMax = false, false
 		switch t.Kind() {
 		case reflect.Int:
 			schema.Min, schema.Max = &minInt, &maxInt
@@ -284,7 +281,6 @@ func getDefaultSchema(t reflect.Type) *Schema {
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		schema.Type, schema.Default, schema.Min = &Types{"integer"}, 0, &zeroUInt
-		schema.ExclusiveMin, schema.ExclusiveMax = false, false
 		switch t.Kind() {
 		case reflect.Uint:
 			schema.Max = &maxUint
@@ -299,7 +295,6 @@ func getDefaultSchema(t reflect.Type) *Schema {
 		}
 	case reflect.Float32, reflect.Float64:
 		schema.Type, schema.Default = &Types{"number"}, 0
-		schema.ExclusiveMin, schema.ExclusiveMax = false, false
 		if t.Kind() == reflect.Float32 {
 			schema.Format, schema.Min, schema.Max = "float", &minFloat32, &maxFloat32
 		} else {
