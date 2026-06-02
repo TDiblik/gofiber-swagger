@@ -12,6 +12,6 @@ update:
 test:
 	go test ./gofiberswagger
 
-EXAMPLES := auth-bearer basic custom-config enums file-upload manually-register-routes embedded-types
+EXAMPLES := auth-bearer basic custom-config enums file-upload manually-register-routes embedded-types swagger-tags
 $(EXAMPLES):
 	go run examples/$@/main.go
