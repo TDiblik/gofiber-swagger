@@ -19,11 +19,13 @@ func Register(app *fiber.App, config Config) error {
 	config.Swagger = swaggerConfigDefault(config.Swagger)
 	config.SwaggerUI = swaggerUIConfigDefault(config.SwaggerUI)
 
+	schemasMutex.RLock()
 	for k, v := range acquiredSchemas {
 		if config.Swagger.Components.Schemas[k] == nil {
 			config.Swagger.Components.Schemas[k] = v
 		}
 	}
+	schemasMutex.RUnlock()
 
 	routes := app.GetRoutes(config.FilterOutAppUse)
 	for _, route := range routes {
