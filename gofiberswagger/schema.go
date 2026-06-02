@@ -187,6 +187,10 @@ func generateSchema(t reflect.Type, stopRecursion bool) *SchemaRef {
 				continue
 			}
 
+			if field.Tag.Get("swaggerignore") == "true" {
+				continue
+			}
+
 			fieldType := field.Type
 			isNullable := false
 			for fieldType.Kind() == reflect.Pointer {
@@ -307,6 +311,23 @@ func getDefaultSchema(t reflect.Type) *Schema {
 }
 
 func parseTags(field reflect.StructField, result *SchemaRef) {
+	swaggerType := field.Tag.Get("swaggertype")
+	if swaggerType != "" {
+		result.Ref = ""
+		result.Value.Properties = nil
+		result.Value.Default = nil
+		if strings.HasPrefix(swaggerType, "[]") {
+			result.Value.Type = &Types{"array"}
+			itemType := strings.TrimPrefix(swaggerType, "[]")
+			if itemType != "" {
+				result.Value.Items = &SchemaRef{Value: &Schema{Type: &Types{itemType}}}
+			}
+		} else {
+			result.Value.Type = &Types{swaggerType}
+			result.Value.Items = nil
+		}
+	}
+
 	jsonTag := field.Tag.Get("json")
 	for _, opt := range strings.Split(jsonTag, ",")[1:] {
 		switch opt {

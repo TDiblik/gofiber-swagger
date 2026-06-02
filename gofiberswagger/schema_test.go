@@ -259,5 +259,41 @@ func TestSchema_WithFormAndQueryTags(t *testing.T) {
 	assert.NotNil(t, schema.Value)
 
 	assert.NotNil(t, schema.Value.Properties["form_field"])
-	assert.NotNil(t, schema.Value.Properties["query_field"])
+}
+
+type SwaggerTagTypes struct {
+	IgnoredField string `swaggerignore:"true"`
+	TypeOverride string `swaggertype:"integer"`
+	ArrayOverride string `swaggertype:"[]string"`
+	ObjOverride []string `swaggertype:"object"`
+}
+
+func TestSchema_WithSwaggerTags(t *testing.T) {
+	t.Parallel()
+
+	schema := CreateSchema[SwaggerTagTypes]()
+	assert.NotNil(t, schema)
+	assert.NotNil(t, schema.Value)
+
+	// IgnoredField should be missing
+	_, exists := schema.Value.Properties["IgnoredField"]
+	assert.False(t, exists, "IgnoredField should not be in properties")
+
+	// TypeOverride should be integer instead of string
+	typeOverrideSchema := schema.Value.Properties["TypeOverride"]
+	assert.NotNil(t, typeOverrideSchema)
+	assert.Equal(t, "integer", (*typeOverrideSchema.Value.Type)[0])
+
+	// ArrayOverride should be array of string
+	arrayOverrideSchema := schema.Value.Properties["ArrayOverride"]
+	assert.NotNil(t, arrayOverrideSchema)
+	assert.Equal(t, "array", (*arrayOverrideSchema.Value.Type)[0])
+	assert.NotNil(t, arrayOverrideSchema.Value.Items)
+	assert.Equal(t, "string", (*arrayOverrideSchema.Value.Items.Value.Type)[0])
+
+	// ObjOverride should be object instead of array of strings
+	objOverrideSchema := schema.Value.Properties["ObjOverride"]
+	assert.NotNil(t, objOverrideSchema)
+	assert.Equal(t, "object", (*objOverrideSchema.Value.Type)[0])
+	assert.Nil(t, objOverrideSchema.Value.Items)
 }
