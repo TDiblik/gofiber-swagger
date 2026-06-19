@@ -262,10 +262,10 @@ func TestSchema_WithFormAndQueryTags(t *testing.T) {
 }
 
 type SwaggerTagTypes struct {
-	IgnoredField string `swaggerignore:"true"`
-	TypeOverride string `swaggertype:"integer"`
-	ArrayOverride string `swaggertype:"[]string"`
-	ObjOverride []string `swaggertype:"object"`
+	IgnoredField  string   `swaggerignore:"true"`
+	TypeOverride  string   `swaggertype:"integer"`
+	ArrayOverride string   `swaggertype:"[]string"`
+	ObjOverride   []string `swaggertype:"object"`
 }
 
 func TestSchema_WithSwaggerTags(t *testing.T) {
