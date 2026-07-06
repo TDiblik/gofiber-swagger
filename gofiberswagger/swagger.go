@@ -36,9 +36,21 @@ func Register(app *fiber.App, config Config) error {
 
 		corrected_path := route.Path
 		for _, param_name := range route.Params {
-			parameter := NewPathParameter(param_name)
-			parameter.Value = parameter.Value.WithSchema(NewStringSchema())
-			operation.AddParameter(parameter.Value)
+			parameter_exists := false
+			if operation.Parameters != nil {
+				for _, p := range operation.Parameters {
+					if p.Value != nil && p.Value.In == openapi3.ParameterInPath && p.Value.Name == param_name {
+						parameter_exists = true
+						break
+					}
+				}
+			}
+
+			if !parameter_exists {
+				parameter := NewPathParameter(param_name)
+				parameter.Value = parameter.Value.WithSchema(NewStringSchema())
+				operation.AddParameter(parameter.Value)
+			}
 
 			corrected_path = strings.Replace(corrected_path, ":"+param_name, "{"+param_name+"}", 1)
 			if param_name[0] == '*' || param_name[0] == '+' {

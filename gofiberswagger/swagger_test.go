@@ -196,6 +196,46 @@ func TestRegister(t *testing.T) {
 		assert.NoError(t, err, "Error while registering swagger")
 	})
 
+	t.Run("should not create duplicate path parameters if custom path parameter is provided", func(t *testing.T) {
+		t.Parallel()
+
+		// setup
+		app := fiber.New()
+		
+		RegisterRoute("GET", "/test/:id", &RouteInfo{
+			Parameters: NewParameters(
+				NewPathParameterExtended("id", &Schema{
+					Type: &Types{"integer"},
+					Format: "int64",
+				}),
+			),
+		})
+		
+		app.Get("/test/:id", func(c fiber.Ctx) error {
+			return c.SendString(fmt.Sprintf("test %s", c.Params("id")))
+		})
+
+		// register swagger
+		config := Config{}
+		config.Swagger = swaggerConfigDefault(config.Swagger)
+		err := Register(app, config)
+		assert.NoError(t, err, "Error while registering swagger")
+		
+		operation := config.Swagger.Paths.Find("/test/{id}").Get
+		assert.NotNil(t, operation, "Operation should not be nil")
+		
+		paramCount := 0
+		for _, param := range operation.Parameters {
+			if param.Value != nil && param.Value.In == openapi3.ParameterInPath && param.Value.Name == "id" {
+				paramCount++
+				assert.Equal(t, "integer", param.Value.Schema.Value.Type.Slice()[0])
+				assert.Equal(t, "int64", param.Value.Schema.Value.Format)
+			}
+		}
+		
+		assert.Equal(t, 1, paramCount, "There should be exactly one path parameter named id")
+	})
+
 	t.Run("should handle wildcard path parameters", func(t *testing.T) {
 		t.Parallel()
 
