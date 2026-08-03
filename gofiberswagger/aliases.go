@@ -41,7 +41,6 @@ type SecuritySchemeRef = openapi3.SecuritySchemeRef
 type SecurityScheme = openapi3.SecurityScheme
 type OAuthFlows = openapi3.OAuthFlows
 type OAuthFlow = openapi3.OAuthFlow
-type StringMap[V any] = openapi3.StringMap[V]
 type Info = openapi3.Info
 type Contact = openapi3.Contact
 type License = openapi3.License
