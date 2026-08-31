@@ -3,7 +3,7 @@ module github.com/TDiblik/gofiber-swagger
 go 1.25.0
 
 require (
-	github.com/getkin/kin-openapi v0.147.0
+	github.com/getkin/kin-openapi v0.149.0
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.12.1
