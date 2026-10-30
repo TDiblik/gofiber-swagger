@@ -202,7 +202,7 @@ func TestRegister(t *testing.T) {
 		// setup
 		app := fiber.New()
 
-		RegisterRoute("GET", "/test/:id", &RouteInfo{
+		RegisterRoute("GET", "/custom-parameter/:id", &RouteInfo{
 			Parameters: NewParameters(
 				NewPathParameterExtended("id", &Schema{
 					Type:   &Types{"integer"},
@@ -211,17 +211,17 @@ func TestRegister(t *testing.T) {
 			),
 		})
 
-		app.Get("/test/:id", func(c fiber.Ctx) error {
+		app.Get("/custom-parameter/:id", func(c fiber.Ctx) error {
 			return c.SendString(fmt.Sprintf("test %s", c.Params("id")))
 		})
 
 		// register swagger
-		config := Config{}
+		config := Config{Swagger: SwaggerConfig{Paths: openapi3.NewPaths(), Components: &Components{}}}
 		config.Swagger = swaggerConfigDefault(config.Swagger)
 		err := Register(app, config)
 		assert.NoError(t, err, "Error while registering swagger")
 
-		operation := config.Swagger.Paths.Find("/test/{id}").Get
+		operation := config.Swagger.Paths.Find("/custom-parameter/{id}").Get
 		assert.NotNil(t, operation, "Operation should not be nil")
 
 		paramCount := 0
