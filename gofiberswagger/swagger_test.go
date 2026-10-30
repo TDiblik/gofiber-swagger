@@ -1,16 +1,91 @@
 package gofiberswagger
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestRegisterSwaggerPath(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		path       string
+		base       string
+		uiURL      string
+		wantURL    string
+		useDefault bool
+	}{
+		{name: "empty", base: "/swagger", wantURL: "/swagger/swagger.yaml"},
+		{name: "explicit default", path: "/swagger", base: "/swagger", wantURL: "/swagger/swagger.yaml"},
+		{name: "custom", path: "/docs", base: "/docs", wantURL: "/docs/swagger.yaml"},
+		{name: "nested", path: "/api/v1/docs", base: "/api/v1/docs", wantURL: "/api/v1/docs/swagger.yaml"},
+		{name: "trailing slash", path: "/docs/", base: "/docs", wantURL: "/docs/swagger.yaml"},
+		{name: "no leading slash", path: "docs", base: "/docs", wantURL: "/docs/swagger.yaml"},
+		{name: "root", path: "/", base: "", wantURL: "/swagger.yaml"},
+		{name: "copied default config", path: "/docs", base: "/docs", wantURL: "/docs/swagger.yaml", useDefault: true},
+		{name: "custom schema URL", path: "/docs", base: "/docs", uiURL: "https://example.com/openapi.json", wantURL: "https://example.com/openapi.json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := fiber.New()
+			config := Config{}
+			if tc.useDefault {
+				config = DefaultConfig
+			}
+			config.CreateSwaggerFiles = false
+			config.SwaggerPath = tc.path
+			if tc.uiURL != "" {
+				config.SwaggerUI.URL = tc.uiURL
+			}
+			config.Swagger = SwaggerConfig{
+				OpenAPI: "3.1.1",
+				Info:    &Info{Title: "Path test", Version: "1.0"},
+				Paths:   openapi3.NewPaths(), Components: &Components{},
+			}
+			require.NoError(t, Register(app, config))
+
+			for _, suffix := range []string{"", "/", "/index.html", "/swagger", "/swagger.json", "/swagger.yaml"} {
+				url := tc.base + suffix
+				if url == "" {
+					url = "/"
+				}
+				resp, err := app.Test(httptest.NewRequest("GET", url, nil))
+				require.NoError(t, err)
+				body, err := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				require.NoError(t, err)
+				assert.Equal(t, 200, resp.StatusCode, url)
+				if strings.HasSuffix(suffix, ".json") {
+					assert.Contains(t, resp.Header.Get("Content-Type"), "application/json")
+					var schema SwaggerConfig
+					require.NoError(t, json.Unmarshal(body, &schema))
+					require.NotNil(t, schema.Info)
+					assert.Equal(t, "Path test", schema.Info.Title)
+				} else if strings.HasSuffix(suffix, ".yaml") {
+					assert.Contains(t, string(body), "title: Path test")
+				} else {
+					assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
+					assert.Contains(t, string(body), `"url":"`+tc.wantURL+`"`)
+				}
+			}
+			if tc.base != "/swagger" && tc.base != "" {
+				resp, err := app.Test(httptest.NewRequest("GET", "/swagger", nil))
+				require.NoError(t, err)
+				resp.Body.Close()
+				assert.Equal(t, 404, resp.StatusCode)
+			}
+		})
+	}
+}
 
 func TestGenerateIndexPage(t *testing.T) {
 	t.Parallel()

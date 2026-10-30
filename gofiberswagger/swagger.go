@@ -16,6 +16,13 @@ import (
 )
 
 func Register(app *fiber.App, config Config) error {
+	if config.SwaggerPath == "" {
+		config.SwaggerPath = DefaultConfig.SwaggerPath
+	}
+	config.SwaggerPath = "/" + strings.Trim(config.SwaggerPath, "/")
+	if config.SwaggerUI.URL == "" || config.SwaggerUI.URL == DefaultUIConfig.URL {
+		config.SwaggerUI.URL = strings.TrimRight(config.SwaggerPath, "/") + "/swagger.yaml"
+	}
 	config.Swagger = swaggerConfigDefault(config.Swagger)
 	config.SwaggerUI = swaggerUIConfigDefault(config.SwaggerUI)
 
@@ -128,7 +135,7 @@ func Register(app *fiber.App, config Config) error {
 		createSwaggerFiles(config.SwaggerFilesPath, index_page, schema_as_json, schema_as_yaml)
 	}
 
-	swagger_routes := app.Group("/swagger")
+	swagger_routes := app.Group(config.SwaggerPath)
 	index_handler := func(c fiber.Ctx) error {
 		return c.Type("html").Send(index_page)
 	}

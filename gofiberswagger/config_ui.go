@@ -22,7 +22,7 @@ type SwaggerUIConfig struct {
 	ConfigURL string `json:"configUrl,omitempty"`
 
 	// The URL pointing to API definition (normally swagger.json or swagger.yaml).
-	// default: "/swagger/swagger.yaml"
+	// default: SwaggerPath + "/swagger.yaml" (normally "/swagger/swagger.yaml").
 	URL string `json:"url,omitempty"`
 
 	// Enables overriding configuration parameters via URL search params.

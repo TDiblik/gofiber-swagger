@@ -121,6 +121,25 @@ func POSTHandlerWithId(c fiber.Ctx) error {
 }
 ```
 
+### Custom Swagger path
+
+Set `SwaggerPath` to serve the Swagger UI and schemas under a custom path:
+
+```go
+config := gofiberswagger.DefaultConfig
+config.SwaggerPath = "/docs"
+if err := gofiberswagger.Register(app, config); err != nil {
+	log.Fatal(err)
+}
+```
+
+The UI is available at `/docs/` and `/docs/index.html`, with schemas at
+`/docs/swagger.json` and `/docs/swagger.yaml`. If `SwaggerPath` is empty, it defaults
+to `/swagger`. Leading and trailing slashes are normalized.
+
+The default `SwaggerUI.URL` automatically follows `SwaggerPath`. Set it to a custom
+schema URL to load a different API definition.
+
 ### Notes
 
 Even though this library is in the early stages of development, from my personal experience, it's quite stable 🤷‍♂️.

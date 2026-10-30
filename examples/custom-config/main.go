@@ -18,6 +18,7 @@ func main() {
 	// Provide the custom options you wanna.
 	// You can go all out and basically use ANY openapi property!
 	gofiberswagger.Register(app, gofiberswagger.Config{
+		SwaggerPath: "/docs",
 		Swagger: gofiberswagger.SwaggerConfig{
 			OpenAPI: "3.0.0",
 			Info: &gofiberswagger.Info{
@@ -26,7 +27,7 @@ func main() {
 			},
 		},
 		SwaggerUI: gofiberswagger.SwaggerUIConfig{
-			URL:    "/swagger/swagger.yaml",
+			// URL defaults to /docs/swagger.yaml based on SwaggerPath.
 			Title:  "Swagger UI - title of the swagger UI page",
 			Layout: "StandaloneLayout",
 			Plugins: []template.JS{
@@ -58,9 +59,9 @@ func main() {
 	})
 
 	// You can now see your:
-	// - UI at /swagger/
-	// - json at /swagger/swagger.json
-	// - yaml at /swagger/swagger.yaml
+	// - UI at /docs/
+	// - json at /docs/swagger.json
+	// - yaml at /docs/swagger.yaml
 
 	log.Fatal(app.Listen(":3000"))
 }

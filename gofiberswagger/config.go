@@ -6,6 +6,8 @@ import "github.com/getkin/kin-openapi/openapi3"
 type SwaggerConfig = openapi3.T
 
 type Config struct {
+	// SwaggerPath is the URL path serving the Swagger UI and schemas. Defaults to /swagger.
+	SwaggerPath              string
 	Swagger                  SwaggerConfig
 	SwaggerUI                SwaggerUIConfig
 	CreateSwaggerFiles       bool
@@ -26,6 +28,7 @@ var DefaultSwaggerConfig = SwaggerConfig{
 	Paths:      &Paths{},
 }
 var DefaultConfig = Config{
+	SwaggerPath:              "/swagger",
 	Swagger:                  DefaultSwaggerConfig,
 	SwaggerUI:                DefaultUIConfig,
 	CreateSwaggerFiles:       true,
